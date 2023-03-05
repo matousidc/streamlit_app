@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import altair as alt
 import statsmodels.formula.api as smf
+import geopandas
+import pydeck as pdk
 
 
 # setup page style
@@ -87,11 +89,24 @@ def get_reg_fit(data: pd.DataFrame, yvar: str, xvar: str, alpha=0.05) -> tuple[p
     return predictions, chart
 
 
-# ============================= defining plots
+# @st.cache_data
+def prepare_geodata():
+    # geo_dpnk = geopandas.read_file("./data_project3/dpnk_json.geojson")
+    geo_dpnk = None
+    geo_roads = geopandas.read_file("./data_project3/cykloopatreni_json.geojson", encoding="utf-8")
+    geo_roads = geo_roads[["rok_realizace", "delka", "geometry"]]
+    geo_roads = geo_roads.drop(geo_roads[geo_roads["rok_realizace"] == 0].index)
+    geo_roads["color"] = geo_roads.apply(lambda x: (237, 28, 36) if x.name % 2 else (180, 0, 200, 140), axis=1)
+    # geo_roads["geometry"] = geo_roads["geometry"].astype("object")
+    return geo_dpnk, geo_roads  # .to_json()
+
+
+# =============================================== defining plots
 # scatter plot with regression line
 df_dpnk = load_df_dpnk()
 df_roads = load_df_roads()
 df_realizace = infrastructure_progress()
+geo_dpnk, geo_roads = prepare_geodata()
 chart = (
     alt.Chart(df_realizace)
     .mark_point(color="red", size=60, filled=True)
@@ -113,11 +128,28 @@ progress_chart = (
     )
 )
 fit, reg_chart = get_reg_fit(df_realizace, yvar="total_length", xvar="year", alpha=0.05)
+# maps
+map_years = (
+    alt.Chart(geo_roads)
+    .mark_geoshape(filled=False)
+    .encode(alt.Color("rok_realizace:Q", scale=alt.Scale(scheme="goldred"), legend=alt.Legend(title="Year")))
+)
+
+layer2 = pdk.Layer(
+    type="GeoJsonLayer",
+    data=geo_roads,
+    pickable=True,
+    # get_fill_color=[255, 255, 255],
+    get_line_color="color",
+    # get_width=100,
+    line_width_scale=20,
+)
+initial_position = pdk.ViewState(latitude=49.196023157428, longitude=16.60988, zoom=11, pitch=0, bearing=0)
+deck = pdk.Deck(layers=[layer2], initial_view_state=initial_position, tooltip={"text": "Built in {rok_realizace}"})
 # ============================= writing to streamlit
 # another arguments into alt.Chart
 # x="year:O",
 # y="total_length:Q",
-# scale=alt.Scale(domain=(0, 140)),
 # .configure_mark(color="red")
 # .interactive()
 # band = alt.Chart(chart).mark_errorband(extent="ci").encode(x="year:O", y=alt.Y("total_length:Q")) # doesnt work on transform_regression
@@ -130,7 +162,12 @@ st.dataframe(df_dpnk)
 st.markdown("### Cycling infrastructure dataset")
 st.dataframe(df_roads)
 st.markdown("### Progress of total cycling infrastructure length with fitted linear regression")
-st.altair_chart(alt.layer(chart, polynomial_fit), use_container_width=True)
 st.altair_chart(chart + reg_chart, use_container_width=True)
+# st.altair_chart(alt.layer(chart, polynomial_fit), use_container_width=True)
 st.markdown("### Length of new cycling infrastructure built each year")
 st.altair_chart(progress_chart, use_container_width=True)
+st.markdown("### Map of cycling infrastructure build by year")
+st.dataframe(geo_roads.astype(str))
+# st.altair_chart(map_years, use_container_width=True)
+st.pydeck_chart(deck)
+print("bruh")
