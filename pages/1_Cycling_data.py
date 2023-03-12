@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 import matplotlib.pyplot as plt
+from matplotlib import cm
 import seaborn as sns
 import altair as alt
 import statsmodels.formula.api as smf
@@ -24,14 +25,14 @@ st.title("Brno cycling statistics")
 
 
 @st.cache_data
-def load_df_dpnk():
+def load_df_dpnk() -> pd.DataFrame:
     """Loads 'to work by bike' dataset"""
     df_dpnk = pd.read_csv("data_project3\dpnk.csv")
     return df_dpnk
 
 
 @st.cache_data
-def load_df_roads():
+def load_df_roads() -> pd.DataFrame:
     """Loads and cleans cycling infrastructure dataset"""
     df_roads = pd.read_csv("data_project3/Cykloopatreni.csv")
     # length in metres
@@ -50,7 +51,8 @@ def load_df_roads():
 
 
 @st.cache_data
-def infrastructure_progress():
+def infrastructure_progress(df_roads: pd.DataFrame) -> pd.DataFrame:
+    """Prepares dataframe with length of built infrastucture"""
     df_realizace = df_roads[["rok_realizace", "delka"]].groupby(["rok_realizace"]).sum().reset_index()
     df_realizace.loc[-1] = [1996.0, 0.0]
     df_realizace.sort_values(by=["rok_realizace"], inplace=True, ignore_index=True)
@@ -61,6 +63,7 @@ def infrastructure_progress():
 
 @st.cache_data
 def get_reg_fit(data: pd.DataFrame, yvar: str, xvar: str, alpha=0.05) -> tuple[pd.DataFrame, alt.Chart]:
+    """Creates confidence interval for altair chart"""
     # Grid for predicted values
     x = data.loc[pd.notnull(data[yvar]), xvar]
     grid = np.arange(x.min(), x.max() + 0.1)
@@ -89,24 +92,41 @@ def get_reg_fit(data: pd.DataFrame, yvar: str, xvar: str, alpha=0.05) -> tuple[p
     return predictions, chart
 
 
-# @st.cache_data
-def prepare_geodata():
-    # geo_dpnk = geopandas.read_file("./data_project3/dpnk_json.geojson")
-    geo_dpnk = None
+@st.cache_data
+def prepare_geodata() -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Prepares geodaframes"""
+    geo_dpnk = geopandas.read_file("./data_project3/dpnk_json.geojson")
     geo_roads = geopandas.read_file("./data_project3/cykloopatreni_json.geojson", encoding="utf-8")
     geo_roads = geo_roads[["rok_realizace", "delka", "geometry"]]
-    geo_roads = geo_roads.drop(geo_roads[geo_roads["rok_realizace"] == 0].index)
-    geo_roads["color"] = geo_roads.apply(lambda x: (237, 28, 36) if x.name % 2 else (180, 0, 200, 140), axis=1)
+    geo_roads.columns = ["year", "length", "geometry"]
+    geo_roads = geo_roads.drop(geo_roads[geo_roads["year"] == 0].index)
+    geo_roads["length"] = round(geo_roads["length"])
     # geo_roads["geometry"] = geo_roads["geometry"].astype("object")
+    geo_dpnk = geo_dpnk[geo_dpnk.columns[2:7].append(geo_dpnk.columns[9:10])]
+    geo_dpnk["mean_years"] = round(geo_dpnk[geo_dpnk.columns[:5]].mean(axis=1)).astype("int")
     return geo_dpnk, geo_roads  # .to_json()
+
+
+def color_column(df: pd.DataFrame, by: str, cmap: str, num: int) -> pd.DataFrame:
+    """Creates cmap color column with num number of bins. Bins from by column"""
+    cmap = plt.get_cmap(cmap, num)
+    rgba_array = cm.ScalarMappable(cmap=cmap).to_rgba(list(range(num)), bytes=True)
+    rgba = [tuple(int(q) for q in x) for x in rgba_array]  # values to int
+    bins = np.linspace(df[by].min(), df[by].max(), num + 1)
+    df["color"] = pd.cut(df[by], bins=bins, labels=rgba)
+    return df
 
 
 # =============================================== defining plots
 # scatter plot with regression line
 df_dpnk = load_df_dpnk()
 df_roads = load_df_roads()
-df_realizace = infrastructure_progress()
+df_realizace = infrastructure_progress(df_roads)
 geo_dpnk, geo_roads = prepare_geodata()
+geo_roads = color_column(df=geo_roads, by="year", cmap="plasma", num=10)
+geo_frequent = geo_dpnk[geo_dpnk["mean_years"] > 300].copy()  # only roads with more then mean month value of 300
+geo_frequent = color_column(df=geo_frequent, by="mean_years", cmap="plasma", num=10)
+
 chart = (
     alt.Chart(df_realizace)
     .mark_point(color="red", size=60, filled=True)
@@ -117,7 +137,7 @@ chart = (
 )
 # y=alt.Y("total_length:Q", axis=alt.Axis(title="Total infrastructure length [km]")),
 
-polynomial_fit = chart.transform_regression("year", "total_length").mark_line(color="darkorange")
+# polynomial_fit = chart.transform_regression("year", "total_length").mark_line(color="darkorange")
 progress_chart = (
     alt.Chart(df_realizace)
     .mark_bar()
@@ -128,25 +148,39 @@ progress_chart = (
     )
 )
 fit, reg_chart = get_reg_fit(df_realizace, yvar="total_length", xvar="year", alpha=0.05)
-# maps
-map_years = (
-    alt.Chart(geo_roads)
-    .mark_geoshape(filled=False)
-    .encode(alt.Color("rok_realizace:Q", scale=alt.Scale(scheme="goldred"), legend=alt.Legend(title="Year")))
-)
+# ==================================== maps
+# doesnt work in streamlit
+# map_years = (
+#     alt.Chart(geo_roads)
+#     .mark_geoshape(filled=False)
+#     .encode(alt.Color("rok_realizace:Q", scale=alt.Scale(scheme="goldred"), legend=alt.Legend(title="Year")))
+# )
 
-layer2 = pdk.Layer(
+initial_position = pdk.ViewState(latitude=49.196023157428, longitude=16.60988, zoom=11, pitch=0, bearing=0)
+map_roads = pdk.Layer(
     type="GeoJsonLayer",
     data=geo_roads,
     pickable=True,
-    # get_fill_color=[255, 255, 255],
     get_line_color="color",
-    # get_width=100,
     line_width_scale=20,
 )
-initial_position = pdk.ViewState(latitude=49.196023157428, longitude=16.60988, zoom=11, pitch=0, bearing=0)
-deck = pdk.Deck(layers=[layer2], initial_view_state=initial_position, tooltip={"text": "Built in {rok_realizace}"})
-# ============================= writing to streamlit
+deck_roads = pdk.Deck(
+    layers=[map_roads],
+    initial_view_state=initial_position,
+    tooltip={"text": "Built in {year}, length: {length} m"},
+)
+map_frequent = pdk.Layer(
+    type="GeoJsonLayer",
+    data=geo_frequent,
+    pickable=True,
+    get_line_color="color",
+    line_width_scale=20,
+)
+deck_frequent = pdk.Deck(
+    layers=[map_frequent],
+    initial_view_state=initial_position,
+    tooltip={"text": "Mean frequency over the years: {mean_years}"},
+)
 # another arguments into alt.Chart
 # x="year:O",
 # y="total_length:Q",
@@ -156,7 +190,7 @@ deck = pdk.Deck(layers=[layer2], initial_view_state=initial_position, tooltip={"
 # scheme="magma" nice but low values not visible on dark background
 # rebeccapurple nice purple
 
-
+# ============================= writing to streamlit
 st.markdown("### 'To work by bike' dataset")
 st.dataframe(df_dpnk)
 st.markdown("### Cycling infrastructure dataset")
@@ -166,8 +200,10 @@ st.altair_chart(chart + reg_chart, use_container_width=True)
 # st.altair_chart(alt.layer(chart, polynomial_fit), use_container_width=True)
 st.markdown("### Length of new cycling infrastructure built each year")
 st.altair_chart(progress_chart, use_container_width=True)
-st.markdown("### Map of cycling infrastructure build by year")
-st.dataframe(geo_roads.astype(str))
-# st.altair_chart(map_years, use_container_width=True)
-st.pydeck_chart(deck)
+st.markdown("### Map of cycling infrastructure built over time")
+# st.dataframe(geo_roads.astype(str))
+st.pydeck_chart(deck_roads)
+st.markdown("### Map of most frequent segments during 'To work by bike'")
+st.pydeck_chart(deck_frequent)
+st.markdown("### Map of most frequent segments during 'To work by bike'")
 print("bruh")
