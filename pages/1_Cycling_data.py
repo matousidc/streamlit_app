@@ -1,4 +1,5 @@
 import numpy as np
+import json
 import pandas as pd
 import streamlit as st
 import matplotlib.pyplot as plt
@@ -8,6 +9,7 @@ import altair as alt
 import statsmodels.formula.api as smf
 import geopandas
 import pydeck as pdk
+from sklearn.cluster import Birch
 
 
 # setup page style
@@ -95,16 +97,44 @@ def get_reg_fit(data: pd.DataFrame, yvar: str, xvar: str, alpha=0.05) -> tuple[p
 @st.cache_data
 def prepare_geodata() -> tuple[pd.DataFrame, pd.DataFrame]:
     """Prepares geodaframes"""
-    geo_dpnk = geopandas.read_file("./data_project3/dpnk_json.geojson")
-    geo_roads = geopandas.read_file("./data_project3/cykloopatreni_json.geojson", encoding="utf-8")
+    # loading dataset through json because streamlit error with single qutoes
+    with open("./data_project3/dpnk_json.geojson") as file:
+        geo_dpnk = geopandas.GeoDataFrame.from_features(json.load(file))
+    # geo_dpnk = geopandas.read_file("./data_project3/dpnk_json.geojson")
+    with open("./data_project3/cykloopatreni_json.geojson") as file:
+        geo_roads = geopandas.GeoDataFrame.from_features(json.load(file))
+    # geo_roads = geopandas.read_file("./data_project3/cykloopatreni_json.geojson", encoding="utf-8")
     geo_roads = geo_roads[["rok_realizace", "delka", "geometry"]]
     geo_roads.columns = ["year", "length", "geometry"]
     geo_roads = geo_roads.drop(geo_roads[geo_roads["year"] == 0].index)
     geo_roads["length"] = round(geo_roads["length"])
     # geo_roads["geometry"] = geo_roads["geometry"].astype("object")
-    geo_dpnk = geo_dpnk[geo_dpnk.columns[2:7].append(geo_dpnk.columns[9:10])]
+    geo_dpnk = geo_dpnk[geo_dpnk.columns[3:8].append(geo_dpnk.columns[0:1])]
     geo_dpnk["mean_years"] = round(geo_dpnk[geo_dpnk.columns[:5]].mean(axis=1)).astype("int")
     return geo_dpnk, geo_roads  # .to_json()
+
+
+@st.cache_data
+def prepare_clusters(_df_in: pd.DataFrame) -> pd.DataFrame:
+    df = _df_in.copy()
+    df = df.set_crs(4326)
+    df["centroid"] = df["geometry"].to_crs(crs=3857).centroid  # to metres
+    df["centroid"] = df["centroid"].to_crs(crs=4326)  # to degrees
+    # clustering
+    centroids = pd.concat([df["centroid"].x, df["centroid"].y], axis=1)
+    brc = Birch(threshold=0.01, n_clusters=12, branching_factor=10).fit_predict(centroids)
+    df["birch"] = brc
+    df["birch_cmap"] = df["birch"].map(df[["mean_years", "birch"]].groupby(["birch"]).sum().to_dict()["mean_years"])
+    # making cmap
+    cmap = plt.get_cmap("plasma", 12)
+    rgba_array = cm.ScalarMappable(cmap=cmap).to_rgba(list(range(12)), bytes=True)
+    rgba = [tuple(int(q) for q in x) for x in rgba_array]  # values to int
+    values = np.sort(df["birch_cmap"].unique())
+    key = {x: y for x, y in zip(values, rgba)}
+    df = df[["geometry", "mean_years", "birch_cmap"]].copy()
+    df["color"] = df["birch_cmap"].map(key)
+    df["birch_cmap"] = df["birch_cmap"] // 1000
+    return df
 
 
 def color_column(df: pd.DataFrame, by: str, cmap: str, num: int) -> pd.DataFrame:
@@ -126,6 +156,7 @@ geo_dpnk, geo_roads = prepare_geodata()
 geo_roads = color_column(df=geo_roads, by="year", cmap="plasma", num=10)
 geo_frequent = geo_dpnk[geo_dpnk["mean_years"] > 300].copy()  # only roads with more then mean month value of 300
 geo_frequent = color_column(df=geo_frequent, by="mean_years", cmap="plasma", num=10)
+geo_clusters = prepare_clusters(geo_dpnk)
 
 chart = (
     alt.Chart(df_realizace)
@@ -151,7 +182,7 @@ fit, reg_chart = get_reg_fit(df_realizace, yvar="total_length", xvar="year", alp
 # ==================================== maps
 # doesnt work in streamlit
 # map_years = (
-#     alt.Chart(geo_roads)
+#     alt.Chart(geo_roads)x
 #     .mark_geoshape(filled=False)
 #     .encode(alt.Color("rok_realizace:Q", scale=alt.Scale(scheme="goldred"), legend=alt.Legend(title="Year")))
 # )
@@ -161,6 +192,7 @@ map_roads = pdk.Layer(
     type="GeoJsonLayer",
     data=geo_roads,
     pickable=True,
+    auto_highlight=True,
     get_line_color="color",
     line_width_scale=20,
 )
@@ -173,6 +205,7 @@ map_frequent = pdk.Layer(
     type="GeoJsonLayer",
     data=geo_frequent,
     pickable=True,
+    auto_highlight=True,
     get_line_color="color",
     line_width_scale=20,
 )
@@ -181,6 +214,20 @@ deck_frequent = pdk.Deck(
     initial_view_state=initial_position,
     tooltip={"text": "Mean frequency over the years: {mean_years}"},
 )
+map_cluster = pdk.Layer(
+    type="GeoJsonLayer",
+    data=geo_clusters,
+    pickable=True,
+    auto_highlight=True,
+    get_line_color="color",
+    line_width_scale=20,
+)
+deck_clusters = pdk.Deck(
+    layers=[map_cluster],
+    initial_view_state=initial_position,
+    tooltip={"text": "Number of cyclists per mont {birch_cmap} (in thousands)"},
+)
+
 # another arguments into alt.Chart
 # x="year:O",
 # y="total_length:Q",
@@ -205,5 +252,6 @@ st.markdown("### Map of cycling infrastructure built over time")
 st.pydeck_chart(deck_roads)
 st.markdown("### Map of most frequent segments during 'To work by bike'")
 st.pydeck_chart(deck_frequent)
-st.markdown("### Map of most frequent segments during 'To work by bike'")
+st.markdown("### Map of areas by frequency during 'To work by bike'")
+st.pydeck_chart(deck_clusters)
 print("bruh")
