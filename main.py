@@ -1,9 +1,8 @@
 import pandas as pd
 import requests
-import streamlit as st
 import matplotlib.pyplot as plt
 import seaborn as sns
-import json
+import streamlit as st
 
 
 def get_price(coin: str, vs_coin: str) -> str:

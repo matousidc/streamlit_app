@@ -1,0 +1,27 @@
+import streamlit as st
+
+
+def streamlit_header():
+    st.set_page_config(
+        page_title="My app",
+        page_icon="🧊",
+        initial_sidebar_state="auto",
+        menu_items={
+            # 'Get Help': 'https://www.extremelycoolapp.com/help',
+            # 'Report a bug': "https://www.extremelycoolapp.com/bug",
+            "About": "Made by https://github.com/matousidc!"
+        },
+    )
+    st.title("Matous site")
+    st.markdown("## Main page")
+
+
+if __name__ == "__main__":
+    streamlit_header()
+
+# sidebar
+# with st.sidebar:
+#     add_radio = st.radio(
+#         "Choose a shipping method", ("Standard (5-15 days)", "Express (2-5 days)")
+#     )
+#     print(add_radio)
