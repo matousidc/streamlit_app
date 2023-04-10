@@ -12,8 +12,9 @@ def streamlit_header():
             "About": "Made by https://github.com/matousidc!"
         },
     )
-    st.title("Matous site")
-    st.markdown("## Main page")
+    st.title("My app")
+    st.title("Bruh")
+    st.markdown("### Pages: Cycling statistics")
 
 
 if __name__ == "__main__":

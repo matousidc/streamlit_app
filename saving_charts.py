@@ -126,15 +126,15 @@ def color_column(df: pd.DataFrame, by: str, cmap: str, num: int) -> pd.DataFrame
     return df
 
 
-def create_colorbar(df_in: pd.DataFrame, by: str, num: int) -> alt.Chart:
+def create_colorbar(df_in: pd.DataFrame, by: str, col_name: str, num: int) -> alt.Chart:
     """Custom colorbar using altair Chart, used for maps"""
     array = np.linspace(df_in[by].min(), df_in[by].max(), num).round()
-    df = pd.DataFrame({'cbar': array, 'number': 1})
+    df = pd.DataFrame({col_name: array})
     colorbar = alt.Chart(df).mark_rect().encode(
-        x=alt.X('cbar:O', axis=alt.Axis(values=[df['cbar'].min(), df['cbar'].max()], labelAngle=0, title=None)),
-        y=alt.Y('number:O', axis=None),
-        color=alt.Color("cbar", scale=alt.Scale(scheme="plasma"), legend=None)
-    )  # .properties(height=80)
+        x=alt.X(f'{col_name}:O',
+                axis=alt.Axis(values=[df[col_name].min(), df[col_name].max()], labelAngle=0, title=None)),
+        color=alt.Color(col_name, scale=alt.Scale(scheme="plasma"), legend=None)
+    ).properties(height=70)
     return colorbar
 
 
@@ -148,9 +148,9 @@ geo_roads = color_column(df=geo_roads, by="year", cmap="plasma", num=10)
 geo_frequent = geo_dpnk[geo_dpnk["mean_years"] > 300].copy()  # only roads with more than mean month value of 300
 geo_frequent = color_column(df=geo_frequent, by="mean_years", cmap="plasma", num=10)
 geo_clusters = prepare_clusters(geo_dpnk)
-cbar_roads = create_colorbar(geo_roads, by='year', num=10)
-cbar_frequent = create_colorbar(geo_frequent, by='mean_years', num=10)
-cbar_clusters = create_colorbar(geo_clusters, by='birch_cmap', num=12)
+cbar_roads = create_colorbar(geo_roads, by='year', col_name='year', num=10)
+cbar_frequent = create_colorbar(geo_frequent, by='mean_years', col_name='frequency', num=10)
+cbar_clusters = create_colorbar(geo_clusters, by='birch_cmap', col_name='frequency', num=12)
 
 chart = (
     alt.Chart(df_realizace)
