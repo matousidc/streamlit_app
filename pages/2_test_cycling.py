@@ -27,14 +27,14 @@ st.set_page_config(
 @st.cache_data
 def load_df_dpnk() -> pd.DataFrame:
     """Loads 'to work by bike' dataset"""
-    df = pd.read_csv(r"data_project3\dpnk.csv")
+    df = pd.read_csv(r"./data_project3/dpnk.csv")
     return df
 
 
 @st.cache_data
 def load_df_roads() -> pd.DataFrame:
     """Loads and cleans cycling infrastructure dataset"""
-    df = pd.read_csv("data_project3/Cykloopatreni.csv")
+    df = pd.read_csv("./data_project3/Cykloopatreni.csv")
     # length in metres
     # deletes rows with year == 0
     df = df.drop(df[df["rok_realizace"] == 0].index)

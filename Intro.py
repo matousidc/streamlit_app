@@ -20,6 +20,7 @@ def streamlit_header():
 if __name__ == "__main__":
     streamlit_header()
 
+# excluded pywin32 from requirements because streamlit cloud runs on linux and thus cant install
 # sidebar
 # with st.sidebar:
 #     add_radio = st.radio(
