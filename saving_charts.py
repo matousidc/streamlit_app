@@ -222,10 +222,9 @@ deck_frequent.to_html('./charts/deck_frequent.html')
 deck_clusters.to_html('./charts/deck_clusters.html')
 
 progress_chart.save('./charts/progress_chart.json')
-progress_chart.save('./charts/progress_chart2.html')
-chart.save('./charts/chart.json')
-reg_chart.save('./charts/reg_chart.json')
 regression.save('./charts/regression.json')
+# chart.save('./charts/chart.json')
+# reg_chart.save('./charts/reg_chart.json')
 
 cbar_roads.save('./charts/cbar_roads.json')
 cbar_frequent.save('./charts/cbar_frequent.json')
