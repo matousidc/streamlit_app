@@ -59,7 +59,7 @@ def extracting_elements(driver: webdriver, num_pages: int) -> list:
 def making_df(elements: list) -> pd.DataFrame:
     """Creates dataframe from scraped html elements"""
     data = {'title': [x.text for x in elements], 'link': [x['href'] for x in elements],
-            'date_of_scraping': datetime.date.today(), 'skills': None}
+            'date_of_scraping': datetime.date.today(), 'skills': None, 'pay': None}
     return pd.DataFrame.from_dict(data)
 
 
@@ -77,7 +77,9 @@ def merging_dfs(df: pd.DataFrame) -> pd.DataFrame:
 def individual_jobs(driver: webdriver, df: pd.DataFrame) -> pd.DataFrame:
     """Searching individual jobs, extracting info into dataframe"""
     for row in df.iterrows():  # row == tuple(index, pd.Series of that row)
+        site_loaded = False  # flag
         if pd.isna(row[1].skills) or row[1].skills == '':
+            site_loaded = True
             print(row[0])
             driver.get(row[1].link)
             wait = WebDriverWait(driver, 10)
@@ -94,9 +96,20 @@ def individual_jobs(driver: webdriver, df: pd.DataFrame) -> pd.DataFrame:
                     print(element)
             req_skills = parsing_job_info(str(element))
             df.loc[row[0], 'skills'] = ','.join(req_skills)
-            print(req_skills)
-        # if row[0] % 10:
-        #     df.to_pickle(Path(Path.cwd(), 'jobs_df.pkl'))
+        # adding values to pay column
+        if pd.isna(row[1].pay) or row[1].pay == '':
+            if not site_loaded:
+                driver.get(row[1].link)
+                wait = WebDriverWait(driver, 10)
+                wait.until(exp_con.presence_of_element_located((By.CSS_SELECTOR,
+                                                                "p.MuiTypography-root.MuiTypography-body1.css-1rlo451")))
+                soup = BeautifulSoup(driver.page_source, 'html.parser')
+            pay_elements = soup.find_all('div',
+                                         class_="css-fh68q9")
+            for x in pay_elements:
+                if 'Employee' in x.text:
+                    df.loc[row[0], 'pay'] = x.text.split('Employee')[-1]
+                    break
     return df
 
 
@@ -109,18 +122,20 @@ def parsing_job_info(element: str) -> list:
 
 
 def outlier():
+    """Helper function for testing outlier"""
     driver = webdriver.Firefox()
-    driver.get('https://jobs.techloop.io/job/23861')
+    driver.get('https://jobs.techloop.io/job/24092')
     wait = WebDriverWait(driver, 10)
     wait.until(exp_con.presence_of_element_located((By.CSS_SELECTOR,
                                                     "p.MuiTypography-root.MuiTypography-body1.css-1rlo451")))
     soup = BeautifulSoup(driver.page_source, 'html.parser')
-    element = soup.find_all('p',
-                            class_='MuiTypography-root MuiTypography-body1 css-1rlo451')
+    element = soup.find_all('div',
+                            class_="css-fh68q9")
     print(element)
-    element = element[-1]
-    req_skills = parsing_job_info(str(element))
-    print(req_skills)
+    print(len(element))
+    for x in element:
+        if 'Employee' in x.text:
+            pay = x.text.split('Employee')[-1]
 
 
 def main():
@@ -130,8 +145,8 @@ def main():
     elements_list = extracting_elements(driver, num_pages)
     df = making_df(elements_list)
     df = merging_dfs(df)
-    print(df)
     df = individual_jobs(driver, df)
+    print(df)
     driver.quit()
     df.to_pickle(Path(Path.cwd(), 'jobs_df.pkl'))
 
