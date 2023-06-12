@@ -62,12 +62,19 @@ def making_df(elements: list) -> pd.DataFrame:
 
 def merging_dfs(df: pd.DataFrame) -> pd.DataFrame:
     """Does union merge on new and previous dataframes"""
-    if Path(Path.cwd(), 'jobs_df.pkl').is_file():
-        df_prev = pd.read_pickle(Path(Path.cwd(), 'jobs_df.pkl'))
-        df = pd.merge(df, df_prev, how='outer')
+    df_db = db_connection(select=True)
+    if df_db is not None:  # TODO: not ideal
+        df = pd.merge(df, df_db, how='outer')
         df.sort_values(by=['date_of_scraping'], ascending=False, ignore_index=True, inplace=True)
         df.drop_duplicates('link', keep='last', inplace=True)  # only unique rows by 'link' column, keeping older date
         df = df.reset_index(drop=True)
+
+    # if Path(Path.cwd(), 'jobs_df.pkl').is_file():
+    #     df_prev = pd.read_pickle(Path(Path.cwd(), 'jobs_df.pkl'))
+    #     df = pd.merge(df, df_prev, how='outer')
+    #     df.sort_values(by=['date_of_scraping'], ascending=False, ignore_index=True, inplace=True)
+    #     df.drop_duplicates('link', keep='last', inplace=True)  # only unique rows by 'link' column, keeping older date
+    #     df = df.reset_index(drop=True)
     return df
 
 
@@ -118,15 +125,23 @@ def parsing_job_info(element: str) -> list:
     return req_skills
 
 
-def db_connection(df: pd.DataFrame):
+def db_connection(df: pd.DataFrame = None, insert: bool = None, select: bool = None) -> pd.DataFrame | bool | None:
     """Makes connection to database, writes df to table"""
     load_dotenv(override=True)
     connection_string = f"mysql+mysqlconnector://{os.getenv('USERNAME')}:{os.getenv('PASSWORD')}@{os.getenv('HOST')}/" \
                         f"{os.getenv('DATABASE')}?ssl_ca=/etc/ssl/cert.pem"
     engine = create_engine(connection_string)
-    with engine.begin() as conn:  # inserting to database
-        rows_num = df.to_sql('jobs', con=conn, if_exists='replace', index=False)
-        print('num of rows affected:', rows_num)
+    if insert:
+        with engine.begin() as conn:  # inserting to database
+            rows_num = df.to_sql('jobs', con=conn, if_exists='replace', index=False)
+            print('num of rows affected:', rows_num)
+        return True
+    if select:
+        with engine.connect() as conn:  # for select query
+            df_db = pd.read_sql_query(text('SELECT * FROM jobs;'), con=conn)
+            print('df_db shape:', df_db.shape)
+        return df_db
+    return None
 
 
 def outlier():
@@ -146,7 +161,18 @@ def outlier():
             pay = x.text.split('Employee')[-1]
 
 
+def pandas_show_options(rows=None, columns=None, width=None):
+    """Sets params for printing df"""
+    if rows:
+        pd.set_option('display.max_rows', rows)
+    if columns:
+        pd.set_option('display.max_columns', columns)
+    if width:
+        pd.set_option('display.width', width)
+
+
 def main():
+    pandas_show_options(columns=5, width=1000)
     driver = webdriver.Firefox()
     num_pages = number_of_pages(driver)
     elements_list = extracting_elements(driver, num_pages)
@@ -156,7 +182,7 @@ def main():
     print(df)
     driver.quit()
     df.to_pickle(Path(Path.cwd(), 'jobs_df.pkl'))
-    db_connection(df)
+    db_connection(df, insert=True)
 
 
 if __name__ == "__main__":
