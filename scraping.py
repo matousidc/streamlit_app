@@ -1,8 +1,5 @@
-# div.gtm-element-visibility-job-impressions-list:nth-child(2) > div:nth-child(1) > div:nth-child(1) > div:nth-child(1) > div:nth-child(1) > h5:nth-child(1) > a:nth-child(1)
-# html body.theme-light div#app div div.jss1 div.MuiGrid-root.MuiGrid-container.MuiGrid-wrap-xs-nowrap.css-jnas21 div.MuiGrid-root.MuiGrid-item.jss3.css-1wxaqej main.jss2 div.jss16.jss19.jss23.MuiBox-root.css-0 div.gtm-element-visibility-job-impressions-list div.MuiPaper-root.MuiPaper-outlined.MuiPaper-rounded.MuiCard-root.css-121z6ut div.MuiBox-root.css-i3pbo div.MuiBox-root.css-qmhpxv div.MuiBox-root.css-0 h5.MuiTypography-root.MuiTypography-h5.css-16ddinj a.MuiTypography-root.MuiTypography-inherit.MuiLink-root.MuiLink-underlineAlways.css-1mnxei8
-# /html/body/div[1]/div/div/div[2]/div/main/div[3]/div[1]/div/div[1]/div/div[1]/h5/a
-import bs4.element
-# <a class="MuiTypography-root MuiTypography-inherit MuiLink-root MuiLink-underlineAlways css-1mnxei8" href="https://jobs.techloop.io/job/21664" target="_blank">Python Developer</a>
+from dotenv import load_dotenv
+import os
 import datetime
 from pathlib import Path
 from bs4 import BeautifulSoup
@@ -11,10 +8,11 @@ from selenium import webdriver
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as exp_con
+from sqlalchemy import create_engine, text, types  # use for pandas queries
 
 
 def number_of_pages(driver: webdriver) -> int:
-    """Finds number of pages from number buttons in page"""
+    """Finds number of pages from number buttons in footer of the page"""
     driver.get(f"https://jobs.techloop.io/?locations=ChIJEVE_wDqUEkcRsLEUZg-vAAQ&query=python&page=0")
     wait = WebDriverWait(driver, 10)
     wait.until(exp_con.presence_of_element_located((By.CSS_SELECTOR,
@@ -44,7 +42,6 @@ def extracting_elements(driver: webdriver, num_pages: int) -> list:
                                                         'a.MuiTypography-root.MuiTypography-inherit.MuiLink-root'
                                                         '.MuiLink-underlineAlways.css-1mnxei8')))
         soup = BeautifulSoup(driver.page_source, 'html.parser')
-        # print(soup)
         elements = soup.find_all('a',
                                  class_='MuiTypography-root MuiTypography-inherit MuiLink-root MuiLink-underlineAlways '
                                         'css-1mnxei8')
@@ -80,7 +77,7 @@ def individual_jobs(driver: webdriver, df: pd.DataFrame) -> pd.DataFrame:
         site_loaded = False  # flag
         if pd.isna(row[1].skills) or row[1].skills == '':
             site_loaded = True
-            print(row[0])
+            print('new row:', row[0])
             driver.get(row[1].link)
             wait = WebDriverWait(driver, 10)
             wait.until(exp_con.presence_of_element_located((By.CSS_SELECTOR,
@@ -116,9 +113,20 @@ def individual_jobs(driver: webdriver, df: pd.DataFrame) -> pd.DataFrame:
 def parsing_job_info(element: str) -> list:
     """Parsing job requirements from string of a html"""
     possible_skills = ['python', 'git', 'pandas', 'pyspark', 'scikit-learn', 'jenkins', 'numpy', 'bash', 'linux', 'sql',
-                       'sklearn', 'pytorch', 'tensorflow', 'jira']
+                       'sklearn', 'pytorch', 'tensorflow', 'keras', 'jira']
     req_skills = [skill for skill in possible_skills if skill in str.lower(element)]
     return req_skills
+
+
+def db_connection(df: pd.DataFrame):
+    """Makes connection to database, writes df to table"""
+    load_dotenv(override=True)
+    connection_string = f"mysql+mysqlconnector://{os.getenv('USERNAME')}:{os.getenv('PASSWORD')}@{os.getenv('HOST')}/" \
+                        f"{os.getenv('DATABASE')}?ssl_ca=/etc/ssl/cert.pem"
+    engine = create_engine(connection_string)
+    with engine.begin() as conn:  # inserting to database
+        rows_num = df.to_sql('jobs', con=conn, if_exists='replace', index=False)
+        print('num of rows affected:', rows_num)
 
 
 def outlier():
@@ -139,7 +147,6 @@ def outlier():
 
 
 def main():
-    # TODO: pd.read_pickle(), compare when scraping, when scraped job already in
     driver = webdriver.Firefox()
     num_pages = number_of_pages(driver)
     elements_list = extracting_elements(driver, num_pages)
@@ -149,6 +156,7 @@ def main():
     print(df)
     driver.quit()
     df.to_pickle(Path(Path.cwd(), 'jobs_df.pkl'))
+    db_connection(df)
 
 
 if __name__ == "__main__":
