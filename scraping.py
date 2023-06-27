@@ -60,11 +60,10 @@ def making_df(elements: list) -> pd.DataFrame:
     return pd.DataFrame.from_dict(data)
 
 
-def merging_dfs(df: pd.DataFrame) -> pd.DataFrame:
-    """Does union merge on new and previous dataframes"""
-    df_db = db_connection(select=True)
-    if df_db is not None:  # TODO: not ideal
-        df = pd.merge(df, df_db, how='outer')
+def merging_dfs(df: pd.DataFrame, df_db: pd.DataFrame) -> pd.DataFrame:
+    """Does union merge on new(df) and fetched from database dataframe(df_db)"""
+    if df_db is not None:  # TODO: not ideal, have some edge cases
+        df = pd.merge(df_db, df, how='outer')  # should prefer df_db rows
         df.sort_values(by=['date_of_scraping'], ascending=False, ignore_index=True, inplace=True)
         df.drop_duplicates('link', keep='last', inplace=True)  # only unique rows by 'link' column, keeping older date
         df = df.reset_index(drop=True)
@@ -92,10 +91,17 @@ def individual_jobs(driver: webdriver, df: pd.DataFrame) -> pd.DataFrame:
             soup = BeautifulSoup(driver.page_source, 'html.parser')
             element = soup.find_all('p',
                                     class_='MuiTypography-root MuiTypography-body1 css-1rlo451')
+            # possible more HTML parts with same class name or job listing no longer exists -> empty list
             if isinstance(element, list):
                 try:
                     element = element[-1]
                 except:
+                    if not element:  # TODO: remove this row, job listing no longer exists
+                        print('bruh', row)  # not sure what is being removed
+                        print(df.shape)
+                        df.drop(row[0], inplace=True)
+                        print(df.shape)
+                        continue
                     print("len element:", len(element))
                     print(element)
             req_skills = parsing_job_info(str(element))
@@ -114,6 +120,7 @@ def individual_jobs(driver: webdriver, df: pd.DataFrame) -> pd.DataFrame:
                 if 'Employee' in x.text:
                     df.loc[row[0], 'pay'] = x.text.split('Employee')[-1]
                     break
+    df.reset_index(drop=True, inplace=True)
     return df
 
 
@@ -134,12 +141,12 @@ def db_connection(df: pd.DataFrame = None, insert: bool = None, select: bool = N
     if insert:
         with engine.begin() as conn:  # inserting to database
             rows_num = df.to_sql('jobs', con=conn, if_exists='replace', index=False)
-            print('num of rows affected:', rows_num)
+            print('db: num of rows affected:', rows_num)
         return True
     if select:
         with engine.connect() as conn:  # for select query
             df_db = pd.read_sql_query(text('SELECT * FROM jobs;'), con=conn)
-            print('df_db shape:', df_db.shape)
+            print('fetching df_db shape:', df_db.shape)
         return df_db
     return None
 
@@ -147,7 +154,7 @@ def db_connection(df: pd.DataFrame = None, insert: bool = None, select: bool = N
 def outlier():
     """Helper function for testing outlier"""
     driver = webdriver.Firefox()
-    driver.get('https://jobs.techloop.io/job/24092')
+    driver.get('https://jobs.techloop.io/job/28408')
     wait = WebDriverWait(driver, 10)
     wait.until(exp_con.presence_of_element_located((By.CSS_SELECTOR,
                                                     "p.MuiTypography-root.MuiTypography-body1.css-1rlo451")))
@@ -159,6 +166,7 @@ def outlier():
     for x in element:
         if 'Employee' in x.text:
             pay = x.text.split('Employee')[-1]
+    print('')
 
 
 def pandas_show_options(rows=None, columns=None, width=None):
@@ -177,12 +185,13 @@ def main():
     num_pages = number_of_pages(driver)
     elements_list = extracting_elements(driver, num_pages)
     df = making_df(elements_list)
-    df = merging_dfs(df)
+    df_db = db_connection(select=True)
+    df = merging_dfs(df, df_db)
     df = individual_jobs(driver, df)
     print(df)
     driver.quit()
-    df.to_pickle(Path(Path.cwd(), 'jobs_df.pkl'))
     db_connection(df, insert=True)
+    df.to_pickle(Path(Path.cwd(), 'jobs_df.pkl'))
 
 
 if __name__ == "__main__":
