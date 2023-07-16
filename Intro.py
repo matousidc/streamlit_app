@@ -13,8 +13,8 @@ def streamlit_header():
         },
     )
     st.title("My app")
-    st.title("Bruh")
-    st.markdown("### Pages: Cycling statistics")
+    # st.title("Bruh")
+    st.markdown("### Pages: Brno jobs \n ### Cycling statistics")
 
 
 if __name__ == "__main__":

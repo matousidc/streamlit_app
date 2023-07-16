@@ -105,6 +105,9 @@ def individual_jobs(driver: webdriver, df: pd.DataFrame) -> pd.DataFrame:
                     print("len element:", len(element))
                     print(element)
             req_skills = parsing_job_info(str(element))
+            if not req_skills:  # if no skills, remove that row
+                df.drop(row[0], inplace=True)
+                continue
             df.loc[row[0], 'skills'] = ','.join(req_skills)
         # adding values to pay column
         if pd.isna(row[1].pay) or row[1].pay == '':
@@ -154,19 +157,20 @@ def db_connection(df: pd.DataFrame = None, insert: bool = None, select: bool = N
 def outlier():
     """Helper function for testing outlier"""
     driver = webdriver.Firefox()
-    driver.get('https://jobs.techloop.io/job/28408')
+    driver.get('https://jobs.techloop.io/job/23140')
     wait = WebDriverWait(driver, 10)
     wait.until(exp_con.presence_of_element_located((By.CSS_SELECTOR,
                                                     "p.MuiTypography-root.MuiTypography-body1.css-1rlo451")))
     soup = BeautifulSoup(driver.page_source, 'html.parser')
-    element = soup.find_all('div',
-                            class_="css-fh68q9")
-    print(element)
-    print(len(element))
-    for x in element:
-        if 'Employee' in x.text:
-            pay = x.text.split('Employee')[-1]
-    print('')
+    # element = soup.find_all('div',
+    #                         class_="css-fh68q9") # pay part
+    # for x in element:
+    #     if 'Employee' in x.text:
+    #         pay = x.text.split('Employee')[-1]
+    element = soup.find_all('p',
+                            class_='MuiTypography-root MuiTypography-body1 css-1rlo451')
+    req_skills = parsing_job_info(str(element))
+    print(req_skills)
 
 
 def pandas_show_options(rows=None, columns=None, width=None):
@@ -192,6 +196,19 @@ def main():
     driver.quit()
     db_connection(df, insert=True)
     df.to_pickle(Path(Path.cwd(), 'jobs_df.pkl'))
+
+
+def main2():
+    pandas_show_options(columns=5, width=1000)
+    driver = webdriver.Firefox()
+    num_pages = number_of_pages(driver)
+    elements_list = extracting_elements(driver, num_pages)
+    df = making_df(elements_list)
+    df_db = db_connection(select=True)
+    df = merging_dfs(df, df_db)
+    df = individual_jobs(driver, df)
+    print(df)
+    driver.quit()
 
 
 if __name__ == "__main__":

@@ -17,7 +17,8 @@ def sqlalchemy_queries(select=None, insert=None):
     # dff = pd.DataFrame(engine.connect().execute(text('SELECT * FROM categories;')))
     if select:
         with engine.connect() as conn:  # for select query
-            df_db = pd.read_sql_query(text('SELECT * FROM jobs;'), con=conn)
+            # df_db = pd.read_sql_query(text('SELECT * FROM jobs;'), con=conn)
+            df_db = pd.read_sql_query(text("SELECT * FROM jobs where skills like '%pandas%';"), con=conn)
             print(df_db)
 
     if insert:
