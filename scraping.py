@@ -1,3 +1,4 @@
+import selenium.common.exceptions
 from dotenv import load_dotenv
 import os
 import datetime
@@ -62,18 +63,12 @@ def making_df(elements: list) -> pd.DataFrame:
 
 def merging_dfs(df: pd.DataFrame, df_db: pd.DataFrame) -> pd.DataFrame:
     """Does union merge on new(df) and fetched from database dataframe(df_db)"""
-    if df_db is not None:  # TODO: not ideal, have some edge cases
+    if not df_db.empty:  # TODO: not ideal, have some edge cases
         df = pd.merge(df_db, df, how='outer')  # should prefer df_db rows
         df.sort_values(by=['date_of_scraping'], ascending=False, ignore_index=True, inplace=True)
         df.drop_duplicates('link', keep='last', inplace=True)  # only unique rows by 'link' column, keeping older date
         df = df.reset_index(drop=True)
 
-    # if Path(Path.cwd(), 'jobs_df.pkl').is_file():
-    #     df_prev = pd.read_pickle(Path(Path.cwd(), 'jobs_df.pkl'))
-    #     df = pd.merge(df, df_prev, how='outer')
-    #     df.sort_values(by=['date_of_scraping'], ascending=False, ignore_index=True, inplace=True)
-    #     df.drop_duplicates('link', keep='last', inplace=True)  # only unique rows by 'link' column, keeping older date
-    #     df = df.reset_index(drop=True)
     return df
 
 
@@ -86,8 +81,12 @@ def individual_jobs(driver: webdriver, df: pd.DataFrame) -> pd.DataFrame:
             print('new row:', row[0])
             driver.get(row[1].link)
             wait = WebDriverWait(driver, 10)
-            wait.until(exp_con.presence_of_element_located((By.CSS_SELECTOR,
-                                                            "p.MuiTypography-root.MuiTypography-body1.css-1rlo451")))
+            try:
+                wait.until(exp_con.presence_of_element_located((By.CSS_SELECTOR,
+                                                                "p.MuiTypography-root.MuiTypography-body1.css-1rlo451")))
+            except selenium.common.exceptions.TimeoutException:
+                print('exception')
+                continue
             soup = BeautifulSoup(driver.page_source, 'html.parser')
             element = soup.find_all('p',
                                     class_='MuiTypography-root MuiTypography-body1 css-1rlo451')
@@ -135,7 +134,8 @@ def parsing_job_info(element: str) -> list:
     return req_skills
 
 
-def db_connection(df: pd.DataFrame = None, insert: bool = None, select: bool = None) -> pd.DataFrame | bool | None:
+def db_connection(table: str, df: pd.DataFrame = None, insert: bool = None,
+                  select: bool = None) -> pd.DataFrame | bool | None:
     """Makes connection to database, writes df to table"""
     load_dotenv(override=True)
     connection_string = f"mysql+mysqlconnector://{os.getenv('USERNAME')}:{os.getenv('PASSWORD')}@{os.getenv('HOST')}/" \
@@ -143,12 +143,12 @@ def db_connection(df: pd.DataFrame = None, insert: bool = None, select: bool = N
     engine = create_engine(connection_string)
     if insert:
         with engine.begin() as conn:  # inserting to database
-            rows_num = df.to_sql('jobs', con=conn, if_exists='replace', index=False)
+            rows_num = df.to_sql(table, con=conn, if_exists='replace', index=False)
             print('db: num of rows affected:', rows_num)
         return True
     if select:
         with engine.connect() as conn:  # for select query
-            df_db = pd.read_sql_query(text('SELECT * FROM jobs;'), con=conn)
+            df_db = pd.read_sql_query(text(f'SELECT * FROM {table};'), con=conn)
             print('fetching df_db shape:', df_db.shape)
         return df_db
     return None
@@ -189,12 +189,12 @@ def main():
     num_pages = number_of_pages(driver)
     elements_list = extracting_elements(driver, num_pages)
     df = making_df(elements_list)
-    df_db = db_connection(select=True)
+    df_db = db_connection(table='jobs', select=True)
     df = merging_dfs(df, df_db)
     df = individual_jobs(driver, df)
     print(df)
     driver.quit()
-    db_connection(df, insert=True)
+    db_connection(table='jobs', df=df, insert=True)
     df.to_pickle(Path(Path.cwd(), 'jobs_df.pkl'))
 
 
@@ -204,13 +204,16 @@ def main2():
     num_pages = number_of_pages(driver)
     elements_list = extracting_elements(driver, num_pages)
     df = making_df(elements_list)
-    df_db = db_connection(select=True)
+    df_db = db_connection(table='jobs2', select=True)
     df = merging_dfs(df, df_db)
     df = individual_jobs(driver, df)
     print(df)
     driver.quit()
+    db_connection(table='jobs2', df=df, insert=True)
+    df.to_pickle(Path(Path.cwd(), 'jobs2_df.pkl'))
 
 
 if __name__ == "__main__":
     main()
+    # main2()
     # outlier()

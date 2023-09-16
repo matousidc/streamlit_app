@@ -43,7 +43,6 @@ with st.form("my_form"):
     option = st.multiselect('With what skill would you like to see jobs?', possible_skills)  # returns list
     st.write('You selected:', option)
     st.form_submit_button("Submit")
-
     if option:
         df = sqlalchemy_queries(option)
         st.dataframe(df, width=5000)

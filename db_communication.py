@@ -10,20 +10,18 @@ def sqlalchemy_queries(select=None, insert=None):
                         f"{os.getenv('DATABASE')}?ssl_ca=/etc/ssl/cert.pem"
     engine = create_engine(connection_string)
 
-    data = {'Name': ['Tom', 'nick', 'krish', 'jack'],
-            'Age': [20, 21, 19, 18]}
-    df = pd.DataFrame(data)
+    df = pd.read_pickle(r"C:\Users\matou\PycharmProjects\projects\streamlit\jobs_df.pkl")
 
     # dff = pd.DataFrame(engine.connect().execute(text('SELECT * FROM categories;')))
     if select:
         with engine.connect() as conn:  # for select query
-            # df_db = pd.read_sql_query(text('SELECT * FROM jobs;'), con=conn)
-            df_db = pd.read_sql_query(text("SELECT * FROM jobs where skills like '%pandas%';"), con=conn)
-            print(df_db)
+            df_db = pd.read_sql_query(text('SELECT * FROM jobs;'), con=conn)
+            # df_db = pd.read_sql_query(text("SELECT * FROM jobs where skills like '%pandas%';"), con=conn)
+            print(df_db.iloc[:10])
 
     if insert:
         with engine.begin() as conn:  # for inserting
-            num_rows = df.to_sql('test', con=conn, if_exists='append', index=False)
+            num_rows = df.to_sql('jobs', con=conn, if_exists='append', index=False)
             # dtype={'Name': types.VARCHAR(255), 'Age': types.INT}
             print('num of rows affected:', num_rows)
 
@@ -59,7 +57,7 @@ def main():
     load_dotenv(override=True)
     pandas_show_options(columns=5, width=1000)
     # mysql_queries()
-    sqlalchemy_queries(select=True, insert=None)  # change to True for what scenario is wanted
+    sqlalchemy_queries(select=True)  # change to True for what scenario is wanted
 
 
 if __name__ == "__main__":
