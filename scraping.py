@@ -195,7 +195,7 @@ def main():
     print(df)
     driver.quit()
     db_connection(table='jobs', df=df, insert=True)
-    df.to_pickle(Path(Path.cwd(), 'jobs_df.pkl'))
+    df.to_pickle(Path(Path.cwd(), 'jobs_df '))
 
 
 def main2():
