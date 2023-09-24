@@ -14,7 +14,7 @@ headers = {"Authorization": f"Bearer {access_token}"}
 
 # getting activities
 activities_url = "https://www.strava.com/api/v3/athlete/activities"
-payload = {"per_page": 150}
+payload = {"per_page": 200}
 r2 = requests.get(activities_url, params=payload, headers=headers)
 # creating df
 activities = []
