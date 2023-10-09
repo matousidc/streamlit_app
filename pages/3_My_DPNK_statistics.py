@@ -1,22 +1,30 @@
+import os
+from dotenv import load_dotenv
 import streamlit as st
 import pandas as pd
 import altair as alt
+from sqlalchemy import create_engine, text
+
+load_dotenv(override=True)
 
 # setup page style
 st.set_page_config(
     page_title="My app-My DPNK statistics",
     page_icon="🧊",
     initial_sidebar_state="auto",
-    menu_items={
-        # 'Get Help': 'https://www.extremelycoolapp.com/help',
-        # 'Report a bug': "https://www.extremelycoolapp.com/bug",
-        "About": "Made by https://github.com/matousidc!"
-    },
+    menu_items={"About": "Made by https://github.com/matousidc!"},
 )
 
-df = pd.read_pickle('activities_df.pkl')
-df_2023 = df.iloc[df[df['name'].str.strip().str.lower() == 'dpnk'].index]
+# fetching data
+with st.spinner():
+    connection_string = f"mysql+mysqlconnector://{os.getenv('USERNAME')}:{os.getenv('PASSWORD')}@{os.getenv('HOST')}/" \
+                        f"{os.getenv('DATABASE')}?ssl_ca=/etc/ssl/cert.pem"
+    engine = create_engine(connection_string)
+    with engine.connect() as conn:
+        df = pd.read_sql_query(text('SELECT * FROM strava_dpnk;'), con=conn)
 
+# preparing dfs
+df_2023 = df.iloc[df[df['name'].str.strip().str.lower() == 'dpnk'].index]
 df_years = df[(df['name'].str.strip().str.lower() == 'work commute') |
               (df['name'].str.strip().str.lower() == 'dpnk')].copy()
 df_years['start_date'] = pd.to_datetime(df_years["start_date"])
@@ -36,11 +44,12 @@ chart_years = (alt.Chart(df_years).mark_line(point=True)
                .encode(x=alt.X('date:T', title="Date"),
                        y=alt.Y('moving_time:Q', scale=alt.Scale(domain=[20, 27]), title="Moving time [minutes]"),
                        color=alt.Color("year", scale=alt.Scale(scheme='magma'), title="Year"),
-                       tooltip=['moving_time', alt.Tooltip('start_date:T')])).properties(width=800, height=400)
+                       tooltip=['moving_time', alt.Tooltip('start_date:T')])).properties(width=800,
+                                                                                         height=400)
 
+# defining frontend
 st.title("My DPNK statistics")
 st.markdown("### DPNK 2023")
 st.altair_chart(layer_chart)
-
 st.markdown("### DPNK all years")
 st.altair_chart(chart_years)
