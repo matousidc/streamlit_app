@@ -9,6 +9,7 @@ from selenium import webdriver
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as exp_con
+from selenium.webdriver.chrome.service import Service
 from sqlalchemy import create_engine, text, types  # use for pandas queries
 
 
@@ -192,28 +193,29 @@ def main():
     df_db = db_connection(table='jobs', select=True)
     df = merging_dfs(df, df_db)
     df = individual_jobs(driver, df)
-    print(df)
+    print(df.head(10))
     driver.quit()
     db_connection(table='jobs', df=df, insert=True)
-    df.to_pickle(Path(Path.cwd(), 'jobs_df '))
+    df.to_pickle(Path(Path.cwd(), 'jobs_df.pkl'))
 
 
-def main2():
-    pandas_show_options(columns=5, width=1000)
-    driver = webdriver.Firefox()
+def main_rpi():
+    service = Service('/usr/lib/chromium-browser/chromedriver')
+    options = webdriver.ChromeOptions()
+    options.add_argument('--headless')
+    driver = webdriver.Chrome(service=service, options=options)
     num_pages = number_of_pages(driver)
     elements_list = extracting_elements(driver, num_pages)
     df = making_df(elements_list)
-    df_db = db_connection(table='jobs2', select=True)
+    df_db = db_connection(table='jobs', select=True)
     df = merging_dfs(df, df_db)
     df = individual_jobs(driver, df)
-    print(df)
+    print(df.head(10))
     driver.quit()
-    db_connection(table='jobs2', df=df, insert=True)
-    df.to_pickle(Path(Path.cwd(), 'jobs2_df.pkl'))
+    db_connection(table='jobs', df=df, insert=True)
+    df.to_pickle(Path(Path.cwd(), 'jobs_df.pkl'))
 
 
 if __name__ == "__main__":
     main()
-    # main2()
     # outlier()
