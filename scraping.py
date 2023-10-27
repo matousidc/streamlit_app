@@ -1,3 +1,5 @@
+#!/home/matou/projects/streamlit_app/.venv/bin/python
+
 import selenium.common.exceptions
 from dotenv import load_dotenv
 import os
@@ -69,7 +71,6 @@ def merging_dfs(df: pd.DataFrame, df_db: pd.DataFrame) -> pd.DataFrame:
         df.sort_values(by=['date_of_scraping'], ascending=False, ignore_index=True, inplace=True)
         df.drop_duplicates('link', keep='last', inplace=True)  # only unique rows by 'link' column, keeping older date
         df = df.reset_index(drop=True)
-
     return df
 
 
@@ -193,7 +194,7 @@ def main():
     df_db = db_connection(table='jobs', select=True)
     df = merging_dfs(df, df_db)
     df = individual_jobs(driver, df)
-    print(df.head(10))
+    print(df)
     driver.quit()
     db_connection(table='jobs', df=df, insert=True)
     df.to_pickle(Path(Path.cwd(), 'jobs_df.pkl'))
@@ -218,4 +219,5 @@ def main_rpi():
 
 if __name__ == "__main__":
     main()
+    # main2()
     # outlier()

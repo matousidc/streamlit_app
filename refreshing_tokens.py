@@ -1,3 +1,5 @@
+#!/home/matou/projects/streamlit_app/.venv/bin/python
+
 import os
 from dotenv import load_dotenv
 import requests
@@ -16,7 +18,7 @@ headers = {"Authorization": f"Bearer {access_token}"}
 
 # getting activities
 activities_url = "https://www.strava.com/api/v3/athlete/activities"
-payload = {"per_page": 400}
+payload = {"per_page": 200}
 r2 = requests.get(activities_url, params=payload, headers=headers)
 
 # creating df
@@ -32,7 +34,7 @@ df = pd.DataFrame(activities,
                            'max_speed'])
 
 # saving df
-df.to_pickle("activities_df.pkl")
+df.to_pickle("/home/matou/projects/streamlit_app/activities_df.pkl")
 connection_string = f"mysql+mysqlconnector://{os.getenv('USERNAME')}:{os.getenv('PASSWORD')}@{os.getenv('HOST')}/" \
                     f"{os.getenv('DATABASE')}?ssl_ca=/etc/ssl/cert.pem"
 engine = create_engine(connection_string)
