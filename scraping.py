@@ -1,3 +1,5 @@
+#!/home/matou/projects/streamlit_app/.venv/bin/python
+
 import selenium.common.exceptions
 from dotenv import load_dotenv
 import os
@@ -9,8 +11,9 @@ from selenium import webdriver
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as exp_con
+from selenium.webdriver.chrome.service import Service
 from sqlalchemy import create_engine, text, types  # use for pandas queries
-
+from pyvirtualdisplay import Display
 
 def number_of_pages(driver: webdriver) -> int:
     """Finds number of pages from number buttons in footer of the page"""
@@ -68,7 +71,6 @@ def merging_dfs(df: pd.DataFrame, df_db: pd.DataFrame) -> pd.DataFrame:
         df.sort_values(by=['date_of_scraping'], ascending=False, ignore_index=True, inplace=True)
         df.drop_duplicates('link', keep='last', inplace=True)  # only unique rows by 'link' column, keeping older date
         df = df.reset_index(drop=True)
-
     return df
 
 
@@ -135,7 +137,7 @@ def parsing_job_info(element: str) -> list:
 
 
 def db_connection(table: str, df: pd.DataFrame = None, insert: bool = None,
-                  select: bool = None) -> pd.DataFrame | bool | None:
+                  select: bool = None):
     """Makes connection to database, writes df to table"""
     load_dotenv(override=True)
     connection_string = f"mysql+mysqlconnector://{os.getenv('USERNAME')}:{os.getenv('PASSWORD')}@{os.getenv('HOST')}/" \
@@ -185,7 +187,11 @@ def pandas_show_options(rows=None, columns=None, width=None):
 
 def main():
     pandas_show_options(columns=5, width=1000)
-    driver = webdriver.Firefox()
+    service = Service('/usr/lib/chromium-browser/chromedriver')
+    options = webdriver.ChromeOptions()
+    options.add_argument('--headless')
+    driver = webdriver.Chrome(service=service, options=options)
+
     num_pages = number_of_pages(driver)
     elements_list = extracting_elements(driver, num_pages)
     df = making_df(elements_list)
@@ -195,25 +201,8 @@ def main():
     print(df)
     driver.quit()
     db_connection(table='jobs', df=df, insert=True)
-    df.to_pickle(Path(Path.cwd(), 'jobs_df '))
-
-
-def main2():
-    pandas_show_options(columns=5, width=1000)
-    driver = webdriver.Firefox()
-    num_pages = number_of_pages(driver)
-    elements_list = extracting_elements(driver, num_pages)
-    df = making_df(elements_list)
-    df_db = db_connection(table='jobs2', select=True)
-    df = merging_dfs(df, df_db)
-    df = individual_jobs(driver, df)
-    print(df)
-    driver.quit()
-    db_connection(table='jobs2', df=df, insert=True)
-    df.to_pickle(Path(Path.cwd(), 'jobs2_df.pkl'))
 
 
 if __name__ == "__main__":
     main()
-    # main2()
-    # outlier()
+
