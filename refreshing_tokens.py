@@ -34,10 +34,11 @@ df = pd.DataFrame(activities,
                            'max_speed'])
 
 # saving df
-df.to_pickle("/home/matou/projects/streamlit_app/activities_df.pkl")
 connection_string = f"mysql+mysqlconnector://{os.getenv('USERNAME')}:{os.getenv('PASSWORD')}@{os.getenv('HOST')}/" \
                     f"{os.getenv('DATABASE')}?ssl_ca=/etc/ssl/cert.pem"
 engine = create_engine(connection_string)
 with engine.begin() as conn:
     num_rows = df.to_sql('strava_dpnk', con=conn, if_exists='append', index=False)
-    print('num of rows affected:', num_rows)
+    pd.set_option('display.max_columns', 8)
+    pd.set_option('display.width', 1000)
+    print(df.head())

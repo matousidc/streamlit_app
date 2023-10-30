@@ -185,7 +185,7 @@ def pandas_show_options(rows=None, columns=None, width=None):
         pd.set_option('display.width', width)
 
 
-def main():
+def main_windows():
     pandas_show_options(columns=5, width=1000)
     driver = webdriver.Firefox()
     num_pages = number_of_pages(driver)
@@ -197,7 +197,6 @@ def main():
     print(df)
     driver.quit()
     db_connection(table='jobs', df=df, insert=True)
-    df.to_pickle(Path(Path.cwd(), 'jobs_df.pkl'))
 
 
 def main_rpi():
@@ -214,10 +213,8 @@ def main_rpi():
     print(df.head(10))
     driver.quit()
     db_connection(table='jobs', df=df, insert=True)
-    df.to_pickle(Path(Path.cwd(), 'jobs_df.pkl'))
 
 
 if __name__ == "__main__":
-    main()
-    # main2()
-    # outlier()
+    main_windows()
+    # main_rpi()
