@@ -1,6 +1,6 @@
 # Streamlit app
 
-## Consists off:
+## Consists of:
 
 - Creation of dataset of python job postings in Brno.
 - Visualization of data about cyclists in Brno(maps, plots).
