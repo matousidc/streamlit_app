@@ -3,30 +3,28 @@ from datetime import date, timedelta
 import os
 import streamlit as st
 from sqlalchemy import create_engine, text  # use for pandas queries
+import sqlite3
 import pandas as pd
 import altair as alt
 
 
 def db_connection(query: str) -> pd.DataFrame:
-    connection_string = f"mysql+mysqlconnector://{os.getenv('USERNAME')}:{os.getenv('PASSWORD')}@{os.getenv('HOST')}/" \
-                        f"{os.getenv('DATABASE')}?ssl_ca=/etc/ssl/cert.pem"
-    engine = create_engine(connection_string)
-    with engine.connect() as conn:
-        df_db = pd.read_sql_query(text(query), con=conn)
+    conn = sqlite3.connect("local_db.db")
+    df_db = pd.read_sql_query(query, con=conn)
     return df_db
 
 
 def construct_query(query_all: bool, choice: list | None = None) -> str:
     """Creates query, chooses between 2 options"""
     if not query_all:
-        query = f"SELECT * FROM jobs WHERE "
+        query = f"SELECT * FROM scraped_jobs WHERE "
         for i, skill in enumerate(choice):
             if i == 0:
                 query += f"skills LIKE '%{skill}%'"
             else:
                 query += f" AND skills LIKE '%{skill}%'"
     else:
-        query = f"SELECT * FROM jobs"
+        query = f"SELECT * FROM scraped_jobs"
     return query
 
 
@@ -67,14 +65,12 @@ st.set_page_config(layout="wide")
 possible_skills = ['python', 'git', 'pandas', 'pyspark', 'scikit-learn', 'jenkins', 'numpy', 'bash', 'linux', 'sql',
                    'sklearn', 'pytorch', 'tensorflow', 'keras', 'jira']
 with st.form("my_form"):
-    option = st.multiselect('With what skill would you like to see jobs?', possible_skills)  # returns list
+    option = st.multiselect('Choose a skill you would like to see jobs for', possible_skills)  # returns list
     st.form_submit_button("Submit")
     if option:
         df_option = db_connection(construct_query(query_all=False, choice=option))
         st.dataframe(df_option, width=5000, column_config={"link": st.column_config.LinkColumn()})
 
 df_all = db_connection(construct_query(query_all=True))
-st.markdown("### What jobs were last uploaded?")
-st.dataframe(last_jobs(df_all), width=5000, hide_index=True, column_config={"link": st.column_config.LinkColumn()})
 st.markdown("### What skills are the most wanted?")
 st.altair_chart(skills_plot(df_all), use_container_width=True)
